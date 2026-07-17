@@ -57,7 +57,7 @@ def normalize_price_text(texto):
     return float(texto)
 
 
-def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3?sb=all_mercadolibre#D[A:ecoflow%20delta%20%203]'):
+def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3#D[A:ecoflow%20delta%203]'):
     preco_desejado = 7500.00
     preco_atual = None
 
