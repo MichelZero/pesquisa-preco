@@ -1,3 +1,6 @@
+#
+# nessa versão foi atualizado o hitorico para mostrar o preço atual e a mensagem de alerta, além de manter o histórico das últimas 50 verificações.
+
 from flask import Flask, render_template
 import json
 import os
@@ -6,48 +9,46 @@ from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 app = Flask(__name__)
-HISTÓRICO_ARQUIVO = os.path.join(os.path.dirname(__file__), 'historico_precos.json')
-MÁX_ENTRADAS_HISTÓRICO = 50
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), 'price_history.json')
+MAX_HISTORY_ENTRIES = 50
 
 
-def carregar_historico():
-    """Carrega o histórico de preços do arquivo JSON, se existir."""
-    if not os.path.exists(HISTÓRICO_ARQUIVO):
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
         return []
     try:
-        with open(HISTÓRICO_ARQUIVO, 'r', encoding='utf-8') as f:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (ValueError, json.JSONDecodeError):
         return []
 
 
-def salvar_historico(historico):
-    """Salva o histórico de preços no arquivo JSON."""
-    with open(HISTÓRICO_ARQUIVO, 'w', encoding='utf-8') as f:
-        json.dump(historico, f, ensure_ascii=False, indent=2)
+def save_history(history):
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 
-def adicionar_ao_historico(preco_texto, mensagem):
-    """Adiciona uma nova entrada ao histórico de preços e salva."""
-    historico = carregar_historico()
+def append_history(preco_text, mensagem):
+    historico = load_history()
     entrada = {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'preco_texto': preco_texto,
+        'preco_text': preco_text,
         'mensagem': mensagem,
     }
     historico.insert(0, entrada)
-    salvar_historico(historico[:MÁX_ENTRADAS_HISTÓRICO])
+    save_history(historico[:MAX_HISTORY_ENTRIES])
     return historico
 
 
-def normalizar_texto_preco(texto):
-    """Normaliza o texto do preço para extrair apenas os números."""
+
+def normalize_price_text(texto):
     if not texto:
         return None
 
@@ -60,7 +61,6 @@ def normalizar_texto_preco(texto):
 
 
 def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3#D[A:ecoflow%20delta%203]'):
-    """Monitora o preço do produto no Mercado Livre."""
     preco_desejado = 7500.00
     preco_atual = None
 
@@ -80,7 +80,6 @@ def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3#D[A:e
         driver.get(url)
         time.sleep(3)
 
-        # Aceita cookies se presentes
         try:
             cookie_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'aceitar') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]"))
@@ -92,36 +91,31 @@ def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3#D[A:e
 
         time.sleep(5)
 
-        # Busca elementos que possam conter o preço
         elementos_preco = driver.find_elements(By.XPATH, "//*[contains(@class, 'andes-money-amount__fraction') or contains(@class, 'price-tag-fraction') or contains(@class, 'price-tag')]")
         print(f"Número de elementos encontrados: {len(elementos_preco)}")
 
-        # Itera sobre os elementos para encontrar o preço
         for elem in elementos_preco:
             texto_preco = elem.text
             if not texto_preco:
                 continue
-            preco_atual = normalizar_texto_preco(texto_preco)
+            preco_atual = normalize_price_text(texto_preco)
             if preco_atual is not None:
                 print(f"Preço encontrado: {texto_preco} -> {preco_atual}")
                 break
 
-        # Se o preço não for encontrado nos elementos, busca na página inteira
         if preco_atual is None:
             corpo_site = driver.find_element(By.TAG_NAME, "body").text
             print("Conteúdo da página recebido:")
             print(corpo_site[:2000])
             padrao_preco = re.findall(r'R\$\s?([0-9.,]+)', corpo_site)
             if padrao_preco:
-                preco_atual = normalizar_texto_preco(padrao_preco[0])
+                preco_atual = normalize_price_text(padrao_preco[0])
                 print(f"Preço encontrado via texto: {padrao_preco[0]} -> {preco_atual}")
 
-        # Se o preço ainda não foi encontrado, retorna erro
         if preco_atual is None:
             print("Erro: O preço não foi encontrado de nenhuma forma na página.")
             return None, "Preço não encontrado. A página pode estar bloqueando o acesso automatizado."
 
-        # Verifica se o preço atual é menor ou igual ao desejado
         if preco_atual <= preco_desejado:
             return preco_atual, f"Alerta: O preço baixou! Atualmente é R$ {preco_atual:.2f}"
 
@@ -134,15 +128,12 @@ def monitorar_preco(url='https://lista.mercadolivre.com.br/ecoflow-delta-3#D[A:e
     finally:
         driver.quit()
 
-
 @app.route('/')
 def index():
-    """Rota principal que executa o monitoramento de preços."""
     preco_atual, mensagem = monitorar_preco()
-    preco_texto = f"R$ {preco_atual:.2f}" if isinstance(preco_atual, float) else None
-    historico = adicionar_ao_historico(preco_texto, mensagem)
+    preco_text = f"R$ {preco_atual:.2f}" if isinstance(preco_atual, float) else None
+    historico = append_history(preco_text, mensagem)
     return render_template('index.html', preco=mensagem, historico=historico)
-
 
 if __name__ == '__main__':
     app.run(debug=True)
