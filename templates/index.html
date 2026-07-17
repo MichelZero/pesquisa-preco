@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento de Preço do Ecoflow Delta 3</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='stylec.css') }}">
+</head>
+<body>
+    <h1>Monitoramento de Preço do Ecoflow Delta 3</h1>
+
+    <div class="status">
+        <p>{{ preco }}</p>
+    </div>
+
+    <h2>Histórico de Preços</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Data / Hora</th>
+                <th>Preço</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in historico %}
+                <tr>
+                    <td>{{ item.timestamp }}</td>
+                    <td>{{ item.preco_text or 'N/A' }}</td>
+                    <td>{{ item.mensagem }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
